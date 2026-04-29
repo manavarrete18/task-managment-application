@@ -1,23 +1,56 @@
-# Getting Started with [Fastify-CLI](https://www.npmjs.com/package/fastify-cli)
-This project was bootstrapped with Fastify-CLI.
+# Task Management API
 
-## Available Scripts
+Backend for a task management application built with Fastify, TypeScript, PostgreSQL, Kysely, JWT, and Zod.
 
-In the project directory, you can run:
+## Requirements
 
-### `npm run dev`
+- Node.js
+- PostgreSQL
 
-To start the app in dev mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## Environment
 
-### `npm start`
+Create a local `.env` file using `.env.example` as reference.
 
-For production mode
+## Scripts
 
-### `npm run test`
+```powershell
+npm.cmd run dev
+```
 
-Run the test cases.
+Start the API in development mode.
 
-## Learn More
+```powershell
+npm.cmd run build:ts
+```
 
-To learn Fastify, check out the [Fastify documentation](https://fastify.dev/docs/latest/).
+Compile TypeScript.
+
+```powershell
+npm.cmd test
+```
+
+Run tests.
+
+```powershell
+npm.cmd run db:migrate
+```
+
+Run database migrations.
+
+```powershell
+npm.cmd run db:rollback
+```
+
+Rollback the latest migration.
+
+## Endpoints
+
+- `GET /`
+- `GET /health`
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /tasks`
+- `POST /tasks`
+- `GET /tasks/:id`
+- `PATCH /tasks/:id`
+- `DELETE /tasks/:id`
