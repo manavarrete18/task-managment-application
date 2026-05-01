@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEventHandler } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, ClipboardList, LogOut, Plus, RefreshCcw, Trash2 } from 'lucide-react'
+import { CheckCircle2, ClipboardList, LogOut, Pencil, Plus, RefreshCcw, Trash2, X } from 'lucide-react'
 import { apiRequest, ApiError } from './api'
 import { AuthProvider } from './auth'
 import { useAuth } from './useAuth'
@@ -37,7 +37,7 @@ function AuthPanel () {
     }
   })
 
-  function handleSubmit (event: FormEvent<HTMLFormElement>) {
+  const handleSubmit: FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault()
     mutation.mutate()
   }
@@ -103,6 +103,10 @@ function TaskDashboard () {
   const [status, setStatus] = useState<TaskStatus | 'all'>('all')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editStatus, setEditStatus] = useState<TaskStatus>('pending')
   const token = session?.token ?? ''
 
   const queryKey = useMemo(() => ['tasks', status], [status])
@@ -135,14 +139,24 @@ function TaskDashboard () {
   })
 
   const updateTask = useMutation({
-    mutationFn: (task: Task) => apiRequest<Task>(`/tasks/${task.id}`, {
+    mutationFn: (input: {
+      id: string;
+      title?: string;
+      description?: string | null;
+      status?: TaskStatus;
+    }) => apiRequest<Task>(`/tasks/${input.id}`, {
       method: 'PATCH',
       token,
       body: JSON.stringify({
-        status: task.status === 'completed' ? 'pending' : 'completed'
+        title: input.title,
+        description: input.description,
+        status: input.status
       })
     }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    onSuccess: () => {
+      setEditingTaskId(null)
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    }
   })
 
   const deleteTask = useMutation({
@@ -153,9 +167,35 @@ function TaskDashboard () {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] })
   })
 
-  function handleCreate (event: FormEvent<HTMLFormElement>) {
+  const handleCreate: FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault()
     createTask.mutate()
+  }
+
+  function startEditing (task: Task) {
+    setEditingTaskId(task.id)
+    setEditTitle(task.title)
+    setEditDescription(task.description ?? '')
+    setEditStatus(task.status)
+  }
+
+  function cancelEditing () {
+    setEditingTaskId(null)
+    setEditTitle('')
+    setEditDescription('')
+    setEditStatus('pending')
+  }
+
+  function handleUpdate (taskId: string): FormEventHandler<HTMLFormElement> {
+    return (event) => {
+    event.preventDefault()
+    updateTask.mutate({
+      id: taskId,
+      title: editTitle,
+      description: editDescription || null,
+      status: editStatus
+    })
+    }
   }
 
   const tasks = tasksQuery.data?.items ?? []
@@ -220,20 +260,67 @@ function TaskDashboard () {
 
           {tasks.map((task) => (
             <Card className="py-4" key={task.id}>
-              <CardContent className="flex items-start justify-between gap-4 max-[820px]:flex-col">
-                <div>
-                  <Badge variant={task.status === 'completed' ? 'default' : 'secondary'}>{task.status}</Badge>
-                  <h2 className="mt-2 text-xl font-semibold text-foreground">{task.title}</h2>
-                  {task.description && <p className="mt-1 text-muted-foreground">{task.description}</p>}
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="icon" type="button" onClick={() => updateTask.mutate(task)} aria-label="Toggle task status">
-                    <CheckCircle2 size={18} />
-                  </Button>
-                  <Button variant="destructive" size="icon" type="button" onClick={() => deleteTask.mutate(task.id)} aria-label="Delete task">
-                    <Trash2 size={18} />
-                  </Button>
-                </div>
+              <CardContent>
+                {editingTaskId === task.id ? (
+                  <form className="grid gap-4" onSubmit={handleUpdate(task.id)}>
+                    <Label>
+                      Title
+                      <Input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} required maxLength={160} />
+                    </Label>
+                    <Label>
+                      Description
+                      <Textarea value={editDescription} onChange={(event) => setEditDescription(event.target.value)} maxLength={1000} rows={3} />
+                    </Label>
+                    <div className="grid gap-2">
+                      <span className="text-sm font-medium">Status</span>
+                      <div className="inline-grid w-fit grid-flow-col gap-1 rounded-lg border bg-muted p-1">
+                        <Button variant={editStatus === 'pending' ? 'secondary' : 'ghost'} type="button" onClick={() => setEditStatus('pending')}>
+                          Pending
+                        </Button>
+                        <Button variant={editStatus === 'completed' ? 'secondary' : 'ghost'} type="button" onClick={() => setEditStatus('completed')}>
+                          Completed
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button disabled={updateTask.isPending} type="submit">
+                        {updateTask.isPending ? 'Saving...' : 'Save changes'}
+                      </Button>
+                      <Button variant="outline" type="button" onClick={cancelEditing}>
+                        <X size={18} />
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex items-start justify-between gap-4 max-[820px]:flex-col">
+                    <div>
+                      <Badge variant={task.status === 'completed' ? 'default' : 'secondary'}>{task.status}</Badge>
+                      <h2 className="mt-2 text-xl font-semibold text-foreground">{task.title}</h2>
+                      {task.description && <p className="mt-1 text-muted-foreground">{task.description}</p>}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        type="button"
+                        onClick={() => updateTask.mutate({
+                          id: task.id,
+                          status: task.status === 'completed' ? 'pending' : 'completed'
+                        })}
+                        aria-label="Toggle task status"
+                      >
+                        <CheckCircle2 size={18} />
+                      </Button>
+                      <Button variant="outline" size="icon" type="button" onClick={() => startEditing(task)} aria-label="Edit task">
+                        <Pencil size={18} />
+                      </Button>
+                      <Button variant="destructive" size="icon" type="button" onClick={() => deleteTask.mutate(task.id)} aria-label="Delete task">
+                        <Trash2 size={18} />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -258,4 +345,3 @@ function App () {
 }
 
 export default App
-
