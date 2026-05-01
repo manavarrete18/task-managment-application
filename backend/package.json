@@ -1,14 +1,15 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "This project was bootstrapped with Fastify-CLI.",
+  "description": "Task management API",
   "main": "app.ts",
   "directories": {
     "test": "test"
   },
   "scripts": {
-    "test": "npm run build:ts && tsc -p test/tsconfig.json && c8 node --test -r ts-node/register \"test/**/*.ts\"",
+    "test": "npm run build:ts && tsc -p test/tsconfig.json && node --test -r ts-node/register \"test/**/*.ts\"",
     "start": "npm run build:ts && fastify start -l info dist/app.js",
+    "serve": "fastify start -l info dist/app.js",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build:ts": "npm run clean && tsc",
     "db:migrate": "ts-node src/db/migrate.ts up",
@@ -37,7 +38,6 @@
   "devDependencies": {
     "@types/node": "^24.0.8",
     "@types/pg": "^8.20.0",
-    "c8": "^10.1.2",
     "concurrently": "^9.0.0",
     "fastify-tsconfig": "^3.0.0",
     "ts-node": "^10.4.0",
