@@ -31,6 +31,12 @@ const updateTaskSchema = z.object({
 const tasks: FastifyPluginAsync = async (fastify): Promise<void> => {
   fastify.addHook('preHandler', fastify.authenticate)
 
+  function applyTaskAccessFilter<T extends {
+    where(column: 'user_id', operator: '=', value: string): T;
+  }> (query: T, user: { sub: string; role: 'admin' | 'user' }) {
+    return user.role === 'admin' ? query : query.where('user_id', '=', user.sub)
+  }
+
   fastify.get('/', async (request, reply) => {
     const query = listTasksQuerySchema.safeParse(request.query)
 
@@ -43,8 +49,7 @@ const tasks: FastifyPluginAsync = async (fastify): Promise<void> => {
 
     let tasksQuery = fastify.db
       .selectFrom('tasks')
-      .select(['id', 'title', 'description', 'status', 'due_date', 'created_at', 'updated_at'])
-      .where('user_id', '=', request.user.sub)
+      .select(['id', 'user_id', 'title', 'description', 'status', 'due_date', 'created_at', 'updated_at'])
       .orderBy('created_at', 'desc')
       .limit(limit)
       .offset(offset)
@@ -52,7 +57,9 @@ const tasks: FastifyPluginAsync = async (fastify): Promise<void> => {
     let countQuery = fastify.db
       .selectFrom('tasks')
       .select((eb) => eb.fn.countAll<string>().as('total'))
-      .where('user_id', '=', request.user.sub)
+
+    tasksQuery = applyTaskAccessFilter(tasksQuery, request.user)
+    countQuery = applyTaskAccessFilter(countQuery, request.user)
 
     if (status) {
       tasksQuery = tasksQuery.where('status', '=', status)
@@ -91,7 +98,7 @@ const tasks: FastifyPluginAsync = async (fastify): Promise<void> => {
         description: body.data.description ?? null,
         due_date: body.data.due_date ?? null
       })
-      .returning(['id', 'title', 'description', 'status', 'due_date', 'created_at', 'updated_at'])
+      .returning(['id', 'user_id', 'title', 'description', 'status', 'due_date', 'created_at', 'updated_at'])
       .executeTakeFirstOrThrow()
 
     return reply.code(201).send(task)
@@ -104,12 +111,13 @@ const tasks: FastifyPluginAsync = async (fastify): Promise<void> => {
       return reply.badRequest('Invalid task id')
     }
 
-    const task = await fastify.db
+    let taskQuery = fastify.db
       .selectFrom('tasks')
-      .select(['id', 'title', 'description', 'status', 'due_date', 'created_at', 'updated_at'])
+      .select(['id', 'user_id', 'title', 'description', 'status', 'due_date', 'created_at', 'updated_at'])
       .where('id', '=', params.data.id)
-      .where('user_id', '=', request.user.sub)
-      .executeTakeFirst()
+
+    taskQuery = applyTaskAccessFilter(taskQuery, request.user)
+    const task = await taskQuery.executeTakeFirst()
 
     if (!task) {
       return reply.notFound('Task not found')
@@ -130,16 +138,17 @@ const tasks: FastifyPluginAsync = async (fastify): Promise<void> => {
       return reply.badRequest('Invalid request body')
     }
 
-    const task = await fastify.db
+    let updateQuery = fastify.db
       .updateTable('tasks')
       .set({
         ...body.data,
         updated_at: sql`now()`
       })
       .where('id', '=', params.data.id)
-      .where('user_id', '=', request.user.sub)
-      .returning(['id', 'title', 'description', 'status', 'due_date', 'created_at', 'updated_at'])
-      .executeTakeFirst()
+      .returning(['id', 'user_id', 'title', 'description', 'status', 'due_date', 'created_at', 'updated_at'])
+
+    updateQuery = applyTaskAccessFilter(updateQuery, request.user)
+    const task = await updateQuery.executeTakeFirst()
 
     if (!task) {
       return reply.notFound('Task not found')
@@ -155,12 +164,13 @@ const tasks: FastifyPluginAsync = async (fastify): Promise<void> => {
       return reply.badRequest('Invalid task id')
     }
 
-    const result = await fastify.db
+    let deleteQuery = fastify.db
       .deleteFrom('tasks')
       .where('id', '=', params.data.id)
-      .where('user_id', '=', request.user.sub)
       .returning('id')
-      .executeTakeFirst()
+
+    deleteQuery = applyTaskAccessFilter(deleteQuery, request.user)
+    const result = await deleteQuery.executeTakeFirst()
 
     if (!result) {
       return reply.notFound('Task not found')
@@ -171,4 +181,3 @@ const tasks: FastifyPluginAsync = async (fastify): Promise<void> => {
 }
 
 export default tasks
-
